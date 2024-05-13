@@ -7,7 +7,10 @@ import io
 from PIL import Image
 from selenium.webdriver.common.by import By
 
+from count_images import count_files_in_directory
 
+item_start = count_files_in_directory('images')
+item_end = item_start + 50
 def get_google_images_url(search_term):
     formatted_search_term = search_term.replace(' ', '+')
     return f"https://www.google.com/search?q={formatted_search_term}&source=lnms&tbm=isch"
@@ -17,6 +20,7 @@ def get_wiki_images_url(search_term):
     return f"https://oldschool.runescape.wiki/w/{formatted_search_term}"
 
 def download_image(download_path, url, file_name):
+    file = None
     try:
         print(f"Downloading image: {url}")
         image_content = requests.get(url).content
@@ -24,11 +28,16 @@ def download_image(download_path, url, file_name):
         image = Image.open(image_file)
         image.save(f"{download_path}/{file_name}")
 
-        with open(f"{download_path}/{file_name}", "wb") as file:
-            file.write(image_content)
+        file = open(f"{download_path}/{file_name}", "wb")
+        file.write(image_content)
+        file.flush()
+        os.fsync(file.fileno())
     except Exception as e:
         print(f"Failed to download image: {url}")
         print(e)
+    finally:
+        if file is not None:
+            file.close()
 
 
 # setup the Chrome driver
@@ -64,22 +73,33 @@ for item in raw:
 #             break
 
 
-for name, icon in data.items():
-    driver.get(get_wiki_images_url(name))
-    print(f"Searching for {name}")
-    thumbnail = driver.find_element(By.XPATH, "//a[@class='mw-file-description']//img[@class='mw-file-element']")
-    print(f'found source: {thumbnail.get_attribute("src")}')
-    if thumbnail.get_attribute("src") is not None and 'thumb' in thumbnail.get_attribute("src"):
-        download_image("images", thumbnail.get_attribute("src"), f"{name}.png")
-
-
-
-
-
-
-
-
-
+for i, (name, icon) in enumerate(data.items()):
+    if i < item_start:
+        continue
+    elif i >= item_end:
+        break
+    try:
+        driver.get(get_wiki_images_url(name))
+        time.sleep(1)
+        print(f"Searching for {name}")
+        descriptions = driver.find_elements(By.CLASS_NAME, "mw-file-description")
+        print(f'Found {len(descriptions)} descriptions for {name}')
+        for description in descriptions:
+            try:
+                thumbnail = description.find_element(By.CLASS_NAME, "mw-file-element")
+                print(f'Found source: {thumbnail.get_attribute("src")}')
+                if thumbnail.get_attribute("src") is not None and 'detail' in thumbnail.get_attribute("src"):
+                    download_image("images", thumbnail.get_attribute("src"), f"{name}.png")
+                    print(f"Downloaded {name}")
+                    break
+            except Exception as e:
+                print(f"Failed to find thumbnail for {name}")
+                print(e)
+                continue
+    except Exception as e:
+        print(f"Failed to find {name}")
+        print(e)
+        continue
 
 # Close the browser
 driver.quit()
