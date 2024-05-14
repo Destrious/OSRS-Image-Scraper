@@ -101,5 +101,32 @@ for i, (name, icon) in enumerate(data.items()):
         print(e)
         continue
 
+# download images that did not exist in dictionary
+for name, icon in data.items():
+    if not os.path.exists(f"images/{name}.png"):
+        try:
+            driver.get(get_wiki_images_url(name))
+            time.sleep(1)
+            print(f"Searching for {name}")
+            descriptions = driver.find_elements(By.CLASS_NAME, "mw-file-description")
+            print(f'Found {len(descriptions)} descriptions for {name}')
+            for description in descriptions:
+                try:
+                    thumbnail = description.find_element(By.CLASS_NAME, "mw-file-element")
+                    print(f'Found source: {thumbnail.get_attribute("src")}')
+                    if thumbnail.get_attribute("src") is not None and 'detail' in thumbnail.get_attribute("src"):
+                        download_image("images", thumbnail.get_attribute("src"), f"{name}.png")
+                        print(f"Downloaded {name}")
+                        break
+                except Exception as e:
+                    print(f"Failed to find thumbnail for {name}")
+                    print(e)
+                    continue
+        except Exception as e:
+            print(f"Failed to find {name}")
+            print(e)
+            continue
+
+
 # Close the browser
 driver.quit()
